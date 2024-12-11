@@ -56,20 +56,6 @@ bot.command('checkin', (ctx) => {
   ctx.reply("How was your day? Feel free to share any positive or negative feelings you experienced.");
 });
 
-// Collect journal entry
-bot.on('text', (ctx) => {
-  const userId = ctx.from?.id?.toString() || '';
-  if (checkInStates[userId]) {
-    userJournals[userId].push(`${moment().format('YYYY-MM-DD')}: ${ctx.message.text}`);
-    saveJournals(userJournals);
-    clearTimeout(checkInStates[userId] as NodeJS.Timeout); // Clear the timeout
-    delete checkInStates[userId];
-    ctx.reply("Thank you! Your entry has been saved.");
-  } else {
-    ctx.reply("Please use /checkin or wait for the scheduled check-in to add a journal entry.");
-  }
-});
-
 // Edit journal entry handler
 bot.command('edit', (ctx) => {
   const userId = ctx.from?.id?.toString() || '';
@@ -84,39 +70,47 @@ bot.command('edit', (ctx) => {
   }
 });
 
-function isEditingState(state: NodeJS.Timeout | { editing: boolean | number }): state is { editing: boolean | number } {
-    return (state as { editing: boolean | number }).editing !== undefined;
-}
-
-// Collect journal entry
+// Single text handler to handle both check-in and editing
 bot.on('text', (ctx) => {
   const userId = ctx.from?.id?.toString() || '';
   const state = checkInStates[userId];
 
   if (state) {
-      if (isEditingState(state)) {
+    if (isEditingState(state)) {
       const match = ctx.message.text.match(/^\d+$/);
       if (match) {
-          const entryIndex = parseInt(match[0], 10) - 1;
-          if (userJournals[userId][entryIndex]) {
+        const entryIndex = parseInt(match[0], 10) - 1;
+        if (userJournals[userId][entryIndex]) {
           state.editing = entryIndex; // Store index for editing
           ctx.reply(`Editing entry ${entryIndex + 1}. Please send the updated text.`);
-          } else {
+        } else {
           ctx.reply("Invalid entry number. Please try again.");
-          }
+        }
       } else if (typeof state.editing === 'number') {
-          userJournals[userId][state.editing] = `${moment().format('YYYY-MM-DD')}: ${ctx.message.text}`;
-          saveJournals(userJournals);
-          delete checkInStates[userId];
-          ctx.reply("Your entry has been updated.");
+        userJournals[userId][state.editing] = `${moment().format('YYYY-MM-DD')}: ${ctx.message.text}`;
+        saveJournals(userJournals);
+        delete checkInStates[userId];
+        ctx.reply("Your entry has been updated.");
       } else {
-          ctx.reply("Please reply with a valid entry number.");
+        ctx.reply("Please reply with a valid entry number.");
       }
-      } else {
-      ctx.reply("Please reply with a valid entry number.");
-      }
+    } else {
+      // Handle journal entry for check-in
+      userJournals[userId].push(`${moment().format('YYYY-MM-DD')}: ${ctx.message.text}`);
+      saveJournals(userJournals);
+      clearTimeout(checkInStates[userId] as NodeJS.Timeout); // Clear the timeout
+      delete checkInStates[userId];
+      ctx.reply("Thank you! Your entry has been saved.");
+    }
+  } else {
+    ctx.reply("Please use /checkin or wait for the scheduled check-in to add a journal entry.");
   }
 });
+
+// Utility function to check if the state is for editing
+function isEditingState(state: NodeJS.Timeout | { editing: boolean | number }): state is { editing: boolean | number } {
+  return (state as { editing: boolean | number }).editing !== undefined;
+}
 
 // Schedule daily check-in at 8 PM user time (adjustable as needed)
 schedule.scheduleJob('0 20 * * *', () => {
