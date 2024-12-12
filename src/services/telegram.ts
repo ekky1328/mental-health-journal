@@ -61,12 +61,21 @@ bot.command('edit', (ctx) => {
   const userId = ctx.from?.id?.toString() || '';
   if (userJournals[userId] && userJournals[userId].length > 0) {
     const entries = userJournals[userId]
-      .map((entry, index) => `${index + 1}: ${entry}`)
+      .map((entry, index) => `${index + 1}: ${entry.slice(0, 10)}...`)
       .join('\n');
     ctx.reply(`Which entry would you like to edit? Reply with the entry number:\n\n${entries}`);
     checkInStates[userId] = { editing: true };
   } else {
     ctx.reply("You don't have any journal entries yet.");
+  }
+});
+
+// Edit journal entry handler
+bot.command('exit-edit', (ctx) => {
+  const userId = ctx.from?.id?.toString() || '';
+  const state = checkInStates[userId];
+  if (isEditingState(state)) {
+      delete checkInStates[userId];
   }
 });
 
@@ -76,6 +85,7 @@ bot.on('text', (ctx) => {
   const state = checkInStates[userId];
 
   if (state) {
+
     if (isEditingState(state)) {
       const match = ctx.message.text.match(/^\d+$/);
       if (match) {
@@ -94,10 +104,18 @@ bot.on('text', (ctx) => {
       } else {
         ctx.reply("Please reply with a valid entry number.");
       }
-    } else {
+    } 
+    
+
+    // Check In
+    else {
       // Handle journal entry for check-in
       userJournals[userId].push(`${moment().format('YYYY-MM-DD')}: ${ctx.message.text}`);
       saveJournals(userJournals);
+
+      // Clean up the message
+      ctx.deleteMessage(ctx.message.message_id);
+
       clearTimeout(checkInStates[userId] as NodeJS.Timeout); // Clear the timeout
       delete checkInStates[userId];
       ctx.reply("Thank you! Your entry has been saved.");
